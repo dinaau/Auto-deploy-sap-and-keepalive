@@ -45,9 +45,10 @@ on:
         default: ''
 
 env:
+  # 优先用仓库 Secrets 指定镜像；否则在下方步骤里自动回落到 GHCR: ghcr.io/<owner>/mini-chrome-novnc:latest
   DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE || 'gcr.io/zenika-hub/alpine-chrome:124' }}
-  MEMORY: ${{ secrets.MEMORY || '3000M' }}
-  DISK: ${{ secrets.DISK || '2048M' }}
+  MEMORY: ${{ secrets.MEMORY || '3072M' }}
+  DISK: ${{ secrets.DISK || '4096M' }}
 
 jobs:
   deploy-app:
@@ -65,8 +66,11 @@ jobs:
         sudo apt-get install -y cf8-cli
 
     - name: Determine CF API endpoint and app name
+      shell: bash
       run: |
+        set -e
         RANDOM_STR=$(head /dev/urandom | tr -dc 'a-z' | head -c 6)
+
         case "${{ github.event.inputs.region }}" in
           "SG(free)")
             echo "CF_API=https://api.cf.ap21.hana.ondemand.com" >> $GITHUB_ENV
@@ -190,6 +194,13 @@ jobs:
             ;;
         esac
 
+        # 若未显式指定 DOCKER_IMAGE，自动使用 ghcr.io/<owner_lc>/mini-chrome-novnc:latest
+        if [ -z "${{ secrets.DOCKER_IMAGE }}" ]; then
+          OWNER_LC="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          echo "DOCKER_IMAGE=ghcr.io/${OWNER_LC}/mini-chrome-novnc:latest" >> $GITHUB_ENV
+        fi
+
+        # 覆盖应用名（如果输入了）
         if [ -n "${{ github.event.inputs.app_name }}" ]; then
           echo "APP_NAME=${{ github.event.inputs.app_name }}" >> $GITHUB_ENV
         fi
@@ -221,26 +232,20 @@ jobs:
 
     - name: Set environment variables and restart app
       run: |
-        # 基础：语言、VNC/WEB 密码（两者都设，兼容不同镜像习惯）
+        # 重要：不要设置 PORT（CF 会注入动态 $PORT，镜像已按 $PORT 监听）
         cf set-env ${{ env.APP_NAME }} LANG "${{ secrets.LANG || 'zh_CN.UTF-8' }}"
         cf set-env ${{ env.APP_NAME }} VNC_PASSWORD "${{ secrets.VNC_PASSWORD || '123456' }}"
-        cf set-env ${{ env.APP_NAME }} PASSWORD "${{ secrets.PASSWORD_WEB || '123456' }}"
+        cf set-env ${{ env.APP_NAME }} RESOLUTION "${{ secrets.RESOLUTION || '1366x768x24' }}"
+        cf set-env ${{ env.APP_NAME }} START_URL "${{ secrets.START_URL || 'https://www.baidu.com' }}"
 
-        # linuxserver/chrome 常用变量（按需在 secrets 中覆盖）
-        cf set-env ${{ env.APP_NAME }} PUID "${{ secrets.PUID || '1000' }}"
-        cf set-env ${{ env.APP_NAME }} PGID "${{ secrets.PGID || '1000' }}"
-        cf set-env ${{ env.APP_NAME }} TZ "${{ secrets.TZ || 'Asia/Shanghai' }}"
-        cf set-env ${{ env.APP_NAME }} UMASK "${{ secrets.UMASK || '022' }}"
-        cf set-env ${{ env.APP_NAME }} CUSTOM_USER "${{ secrets.CUSTOM_USER || 'user' }}"
-
-        # 如镜像支持从 PORT 变量监听，请保留（部分镜像会忽略）
-        cf set-env ${{ env.APP_NAME }} PORT "8080"
-
-        # 可选：从 .env 批量导入
+        # 可选：从 .env 批量导入（注：不会覆盖上面专门设定的变量）
         if [ -f .env ]; then
           while IFS= read -r line; do
             if [[ ! "$line" =~ ^# ]] && [[ -n "$line" ]]; then
               IFS='=' read -r key value <<< "$line"
+              case "$key" in
+                PORT) continue ;;  # 不覆盖 CF 的 PORT
+              esac
               cf set-env ${{ env.APP_NAME }} "$key" "$value"
             fi
           done < .env
@@ -270,7 +275,7 @@ jobs:
         echo "应用名称(App Name): ${{ env.APP_NAME }}"
         ROUTE=$(cf app ${{ env.APP_NAME }} | grep "routes:" | awk '{print $2}')
         if [ -n "$ROUTE" ]; then
-          echo "Chrome—URL: https://$ROUTE"
+          echo "Chrome—URL: https://$ROUTE/vnc.html"
         else
           echo "⚠️ 未找到应用路由，请检查部署状态。"
         fi

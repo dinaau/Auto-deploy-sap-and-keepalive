@@ -51,7 +51,7 @@ on:
 
 env:
   DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE || 'lscr.io/linuxserver/chrome:latest' }}
-  MEMORY: ${{ secrets.MEMORY || '2000M' }}
+  MEMORY: ${{ secrets.MEMORY || '1500M' }}
   DISK: ${{ secrets.DISK || '2048M' }}
 
 jobs:

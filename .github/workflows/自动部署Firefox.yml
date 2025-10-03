@@ -45,8 +45,8 @@ on:
         default: ''
 
 env:
-  DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE || 'lscr.io/linuxserver/chrome:latest' }}
-  MEMORY: ${{ secrets.MEMORY || '2000M' }}
+  DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE || 'gcr.io/zenika-hub/alpine-chrome:124' }}
+  MEMORY: ${{ secrets.MEMORY || '3000M' }}
   DISK: ${{ secrets.DISK || '2048M' }}
 
 jobs:

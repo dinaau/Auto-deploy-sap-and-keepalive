@@ -50,8 +50,8 @@ on:
         default: ''
 
 env:
-  DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE || 'ghcr.io/eooce/firefox:latest' }}
-  MEMORY: ${{ secrets.MEMORY || '1536M' }}
+  DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE || 'lscr.io/linuxserver/chrome:latest' }}
+  MEMORY: ${{ secrets.MEMORY || '2536M' }}
   DISK: ${{ secrets.DISK || '2048M' }}
 
 jobs:

@@ -273,7 +273,7 @@ jobs:
           exit 1
         fi
         
-    - name: 详细部署信息
+    - name: 详细部署信息（直达 noVNC，免点Connect/免输密码）
       run: |
         echo "🚀 部署完成！详细信息如下："
         echo "区域(Region): ${{ github.event.inputs.region }}"
@@ -281,10 +281,55 @@ jobs:
         echo "空间(SPACE): ${{ env.SPACE }}"
         echo "应用名称(App Name): ${{ env.APP_NAME }}"
 
-        # 获取应用路由
-        ROUTE=$(cf app ${{ env.APP_NAME }} | grep "routes:" | awk '{print $2}')
+        # 保护日志里出现的明文密码
+        RAW_PW="${{ secrets.VNC_PASSWORD }}"
+        if [ -n "$RAW_PW" ]; then
+          echo "::add-mask::$RAW_PW"
+        fi
+
+        # 获取应用路由（取第一个路由，去掉逗号后的部分）
+        ROUTE=$(cf app ${{ env.APP_NAME }} | awk '/routes:/{print $2}' | cut -d, -f1)
+
         if [ -n "$ROUTE" ]; then
-          echo "Firefox—URL: https://$ROUTE"
+          # URL 参数：自动连接、自动重连、远端缩放
+          PARAMS="autoconnect=1&reconnect=1&resize=remote"
+
+          # 若设置了 VNC 密码，则做 URL 编码并拼接到参数中
+          PW_ENC=""
+          if [ -n "$RAW_PW" ]; then
+            PW_ENC=$(python3 - <<'PY'
+import os, urllib.parse
+pw=os.environ.get('RAW_PW','')
+print(urllib.parse.quote(pw, safe=''))
+PY
+)
+            # 编码后的密码同样遮罩
+            if [ -n "$PW_ENC" ]; then
+              echo "::add-mask::$PW_ENC"
+              PARAMS="$PARAMS&password=$PW_ENC"
+            fi
+          fi
+
+          # 探测 noVNC 页面路径：优先 /vnc.html，失败再试 /novnc/vnc.html
+          BASE1="https://$ROUTE/vnc.html"
+          BASE2="https://$ROUTE/novnc/vnc.html"
+
+          # 如 curl 不可用，可省略探测逻辑，直接用 BASE1
+          CODE1=$(curl -sI "$BASE1" | awk 'NR==1{print $2}')
+          if [ "$CODE1" = "200" ]; then
+            FINAL_URL="$BASE1?$PARAMS"
+          else
+            CODE2=$(curl -sI "$BASE2" | awk 'NR==1{print $2}')
+            if [ "$CODE2" = "200" ]; then
+              FINAL_URL="$BASE2?$PARAMS"
+            else
+              # 都探测不到时，退回根路径（多数镜像仍会处理）
+              FINAL_URL="https://$ROUTE/vnc.html?$PARAMS"
+            fi
+          fi
+
+          echo "Firefox — 直达URL（打开即进桌面，无需点Connect/无需手输密码）:"
+          echo "$FINAL_URL"
         else
           echo "⚠️ 未找到应用路由，请检查部署状态。"
         fi

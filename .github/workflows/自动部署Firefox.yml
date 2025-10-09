@@ -1,7 +1,7 @@
 name: 自动部署Firefox到SAP
 
 on:
-  workflow_dispatch:  # 只允许手动触发
+  workflow_dispatch:
     inputs:
       region:
         description: '选择部署区域'
@@ -14,7 +14,7 @@ on:
           - US(free)  # aws美国    
           # AWS 区域
           - AWS-AU(Sydney)
-          - AWS-BR(S?o Paulo)
+          - AWS-BR(São Paulo)
           - AWS-KR(Seoul)
           - AWS-CA(Montreal)
           - AWS-US(VA)
@@ -24,7 +24,7 @@ on:
           - AWS-SG(Singapore)
           # GCP 区域
           - GCP-AU(Sydney)
-          - GCP-BR(S?o Paulo)
+          - GCP-BR(São Paulo)
           - GCP-US(IA)
           - GCP-EU(Frankfurt)
           - GCP-JP(Osaka)
@@ -34,7 +34,7 @@ on:
           - GCP-KSA(Dammam)
           # Azure 区域
           - Azure-AU(Sydney)
-          - Azure-BR(S?o Paulo)
+          - Azure-BR(São Paulo)
           - Azure-CA(Montreal)
           - Azure-US(VA)
           - Azure-US(WA)
@@ -51,8 +51,10 @@ on:
 
 env:
   DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE || 'ghcr.io/eooce/firefox:latest' }}
-  MEMORY: ${{ secrets.MEMORY || '1536M' }}
+  MEMORY: ${{ secrets.MEMORY || '1500M' }}
   DISK: ${{ secrets.DISK || '2048M' }}
+  # 这里直接把 VNC 密码写死
+  VNC_PASSWORD_FIX: '123456'
 
 jobs:
   deploy-app:
@@ -71,11 +73,8 @@ jobs:
 
     - name: Determine CF API endpoint and app name
       run: |
-        # 设置API端点和生成随机字符串
         RANDOM_STR=$(head /dev/urandom | tr -dc 'a-z' | head -c 6)
-        
         case "${{ github.event.inputs.region }}" in
-          # 免费区域
           "SG(free)")
             echo "CF_API=https://api.cf.ap21.hana.ondemand.com" >> $GITHUB_ENV
             echo "APP_NAME=firefox-freesg$RANDOM_STR" >> $GITHUB_ENV
@@ -84,12 +83,11 @@ jobs:
             echo "CF_API=https://api.cf.us10-001.hana.ondemand.com" >> $GITHUB_ENV
             echo "APP_NAME=firefox-freeus$RANDOM_STR" >> $GITHUB_ENV
             ;;
-          # AWS 区域
           "AWS-AU(Sydney)")
             echo "CF_API=https://api.cf.ap10.hana.ondemand.com" >> $GITHUB_ENV
             echo "APP_NAME=firefox-awsau$RANDOM_STR" >> $GITHUB_ENV
             ;;
-          "AWS-BR(S?o Paulo)")
+          "AWS-BR(São Paulo)")
             echo "CF_API=https://api.cf.br10.hana.ondemand.com" >> $GITHUB_ENV
             echo "APP_NAME=firefox-awsbr$RANDOM_STR" >> $GITHUB_ENV
             ;;
@@ -121,13 +119,11 @@ jobs:
             echo "CF_API=https://api.cf.ap11.hana.ondemand.com" >> $GITHUB_ENV
             echo "APP_NAME=firefox-awssg$RANDOM_STR" >> $GITHUB_ENV
             ;;
-          
-          # GCP 区域
           "GCP-AU(Sydney)")
             echo "CF_API=https://api.cf.ap30.hana.ondemand.com" >> $GITHUB_ENV
             echo "APP_NAME=firefox-gcpau$RANDOM_STR" >> $GITHUB_ENV
             ;;
-          "GCP-BR(S?o Paulo)")
+          "GCP-BR(São Paulo)")
             echo "CF_API=https://api.cf.br30.hana.ondemand.com" >> $GITHUB_ENV
             echo "APP_NAME=firefox-gcpbr$RANDOM_STR" >> $GITHUB_ENV
             ;;
@@ -159,13 +155,11 @@ jobs:
             echo "CF_API=https://api.cf.sa31.hana.ondemand.com" >> $GITHUB_ENV
             echo "APP_NAME=firefox-gcpsa$RANDOM_STR" >> $GITHUB_ENV
             ;;
-          
-          # Azure 区域
           "Azure-AU(Sydney)")
             echo "CF_API=https://api.cf.ap20.hana.ondemand.com" >> $GITHUB_ENV
             echo "APP_NAME=firefox-azau$RANDOM_STR" >> $GITHUB_ENV
             ;;
-          "Azure-BR(S?o Paulo)")
+          "Azure-BR(São Paulo)")
             echo "CF_API=https://api.cf.br20.hana.ondemand.com" >> $GITHUB_ENV
             echo "APP_NAME=firefox-azbr$RANDOM_STR" >> $GITHUB_ENV
             ;;
@@ -193,8 +187,6 @@ jobs:
             echo "CF_API=https://api.cf.ap21.hana.ondemand.com" >> $GITHUB_ENV
             echo "APP_NAME=firefox-azsg$RANDOM_STR" >> $GITHUB_ENV
             ;;
-          
-          # SAP Neo 区域
           "Neo-UAE(Dubai)")
             echo "CF_API=https://api.cf.neo-ae1.hana.ondemand.com" >> $GITHUB_ENV
             echo "APP_NAME=firefox-neouae$RANDOM_STR" >> $GITHUB_ENV
@@ -204,12 +196,11 @@ jobs:
             echo "APP_NAME=firefox-neoksa$RANDOM_STR" >> $GITHUB_ENV
             ;;
         esac
-        
-        # 如果用户提供了应用名称，则使用用户提供的
+
         if [ -n "${{ github.event.inputs.app_name }}" ]; then
           echo "APP_NAME=${{ github.event.inputs.app_name }}" >> $GITHUB_ENV
         fi
-        
+
         echo "使用API端点: $CF_API"
         echo "应用名称: $APP_NAME"
         echo "部署类型: ${{ env.DOCKER_IMAGE }}"
@@ -217,18 +208,8 @@ jobs:
     - name: Login to Cloud Foundry
       run: |
         cf login -a ${{ env.CF_API }} -u "${{ secrets.EMAIL }}" -p "${{ secrets.PASSWORD }}"
-
-        # 获取组织列表
-        ORG=$(cf orgs | sed -n '4p')
-        echo "Selected org: $ORG"
-        echo "ORG=$ORG" >> $GITHUB_ENV
-
-        # 获取空间列表
-        SPACE=$(cf spaces | sed -n '4p')
-        echo "Selected space: $SPACE"
-        echo "SPACE=$SPACE" >> $GITHUB_ENV
-
-        # 使用获取的组织和空间重新登录
+        ORG=$(cf orgs | sed -n '4p'); echo "ORG=$ORG" >> $GITHUB_ENV
+        SPACE=$(cf spaces | sed -n '4p'); echo "SPACE=$SPACE" >> $GITHUB_ENV
         cf login -a ${{ env.CF_API }} -u "${{ secrets.EMAIL }}" -p "${{ secrets.PASSWORD }}" -o "$ORG" -s "$SPACE"
 
     - name: Deploy application
@@ -240,14 +221,14 @@ jobs:
           echo "伙计,没资源了,部署失败,请明天早上8:10至9:00再尝试部署,已清理失败部署残留"
           exit 1
         fi
-        
+
     - name: Set environment variables and restart app
       run: |
-        # VNC密码和语言环境变量
-        cf set-env ${{ env.APP_NAME }} LANG "${{ secrets.LANG || 'zh_CN.UTF-8' }}"
-        cf set-env ${{ env.APP_NAME }} VNC_PASSWORD "${{ secrets.VNC_PASSWORD || '123456' }}"
-        
-        # 可选：从文件读取环境变量(如果存在)
+        # 直接把 VNC 密码注入到容器环境（供 VNC 服务端读取）
+        cf set-env ${{ env.APP_NAME }} LANG "zh_CN.UTF-8"
+        cf set-env ${{ env.APP_NAME }} VNC_PASSWORD "${{ env.VNC_PASSWORD_FIX }}"
+
+        # 可选：从 .env 读取更多变量
         if [ -f .env ]; then
           while IFS= read -r line; do
             if [[ ! "$line" =~ ^# ]] && [[ -n "$line" ]]; then
@@ -256,45 +237,62 @@ jobs:
             fi
           done < .env
         fi
-        
+
         sleep 3
-        
         cf restage ${{ env.APP_NAME }}
 
     - name: Verify deployment
       run: |
-        STATUS=$(cf app ${{ env.APP_NAME }} | grep "requested state:" | awk '{print $3}')
+        STATUS=$(cf app ${{ env.APP_NAME }} | awk '/requested state:/{print $3}')
         if [ "$STATUS" = "started" ]; then
-          echo "? firefox启动成功"
+          echo "✅ firefox启动成功"
         else
-          echo "? 应用启动失败，当前状态: $STATUS"
+          echo "❌ 应用启动失败，当前状态: $STATUS"
           echo "查看应用日志:"
           cf logs ${{ env.APP_NAME }} --recent
           exit 1
         fi
-        
-    - name: 详细部署信息
+
+    - name: 详细部署信息（直达 noVNC，免点Connect/免输密码）
       run: |
-        echo "?? 部署完成！详细信息如下："
+        echo "🚀 部署完成！详细信息如下："
         echo "区域(Region): ${{ github.event.inputs.region }}"
         echo "组织(ORG): ${{ env.ORG }}"
         echo "空间(SPACE): ${{ env.SPACE }}"
         echo "应用名称(App Name): ${{ env.APP_NAME }}"
 
-         # 获取应用路由
-        ROUTE=$(cf app ${{ env.APP_NAME }} | awk '/routes:/{print $2}')
+        # 遮住日志里的明文密码（功能不受影响）
+        echo "::add-mask::${{ env.VNC_PASSWORD_FIX }}"
+
+        # 获取路由
+        ROUTE=$(cf app ${{ env.APP_NAME }} | awk '/routes:/{print $2}' | cut -d, -f1)
+
         if [ -n "$ROUTE" ]; then
-          # 如果设置了 VNC 密码，就把它拼进 URL；否则不带 password 参数
-          if [ -n "${{ secrets.VNC_PASSWORD }}" ]; then
-            PW="&password=${{ secrets.VNC_PASSWORD }}"
+          PARAMS="autoconnect=1&reconnect=1&resize=remote&password=${{ env.VNC_PASSWORD_FIX }}"
+
+          # 探测常见 noVNC 页面路径
+          BASE1="https://$ROUTE/vnc.html"
+          BASE2="https://$ROUTE/novnc/vnc.html"
+
+          # 如 curl 不可用，可直接输出 BASE1
+          if command -v curl >/dev/null 2>&1; then
+            CODE1=$(curl -sI "$BASE1" | awk 'NR==1{print $2}')
+            if [ "$CODE1" = "200" ]; then
+              FINAL_URL="$BASE1?$PARAMS"
+            else
+              CODE2=$(curl -sI "$BASE2" | awk 'NR==1{print $2}')
+              if [ "$CODE2" = "200" ]; then
+                FINAL_URL="$BASE2?$PARAMS"
+              else
+                FINAL_URL="$BASE1?$PARAMS"
+              fi
+            fi
           else
-            PW=""
+            FINAL_URL="$BASE1?$PARAMS"
           fi
 
-          # 大多数镜像的 noVNC 页面路径是 /vnc.html
-          # 少数镜像可能是 /novnc/vnc.html，若打不开请把下面一行里的路径改成 /novnc/vnc.html
-          echo "Firefox — 直达URL（免点Connect/免输密码）:"
-          echo "https://$ROUTE/vnc.html?autoconnect=1&reconnect=1&resize=remote$PW"
+          echo "Firefox — 直达URL（打开即进桌面，无需点Connect/无需手输密码）:"
+          echo "$FINAL_URL"
         else
-          echo "?? 未找到应用路由，请检查部署状态。"
+          echo "⚠️ 未找到应用路由，请检查部署状态。"
         fi

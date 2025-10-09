@@ -53,8 +53,8 @@ env:
   DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE || 'ghcr.io/eooce/firefox:latest' }}
   MEMORY: ${{ secrets.MEMORY || '1500M' }}
   DISK: ${{ secrets.DISK || '2048M' }}
-  # 这里直接把 VNC 密码写死
-  VNC_PASSWORD_FIX: '123456'
+  # 明文写死 VNC 密码（你要求的）
+  VNC_PASSWORD: '123456'
 
 jobs:
   deploy-app:
@@ -69,7 +69,7 @@ jobs:
         wget -q -O - https://packages.cloudfoundry.org/debian/cli.cloudfoundry.org.key | sudo apt-key add -
         echo "deb https://packages.cloudfoundry.org/debian stable main" | sudo tee /etc/apt/sources.list.d/cloudfoundry-cli.list
         sudo apt-get update
-        sudo apt-get install -y cf8-cli
+        sudo apt-get install -y cf8-cli curl
 
     - name: Determine CF API endpoint and app name
       run: |
@@ -224,9 +224,9 @@ jobs:
 
     - name: Set environment variables and restart app
       run: |
-        # 直接把 VNC 密码注入到容器环境（供 VNC 服务端读取）
+        # 直接把 VNC 密码注入到容器环境（供镜像读取）
         cf set-env ${{ env.APP_NAME }} LANG "zh_CN.UTF-8"
-        cf set-env ${{ env.APP_NAME }} VNC_PASSWORD "${{ env.VNC_PASSWORD_FIX }}"
+        cf set-env ${{ env.APP_NAME }} VNC_PASSWORD "${{ env.VNC_PASSWORD }}"
 
         # 可选：从 .env 读取更多变量
         if [ -f .env ]; then
@@ -261,38 +261,39 @@ jobs:
         echo "空间(SPACE): ${{ env.SPACE }}"
         echo "应用名称(App Name): ${{ env.APP_NAME }}"
 
-        # 遮住日志里的明文密码（功能不受影响）
-        echo "::add-mask::${{ env.VNC_PASSWORD_FIX }}"
-
-        # 获取路由
         ROUTE=$(cf app ${{ env.APP_NAME }} | awk '/routes:/{print $2}' | cut -d, -f1)
 
         if [ -n "$ROUTE" ]; then
-          PARAMS="autoconnect=1&reconnect=1&resize=remote&password=${{ env.VNC_PASSWORD_FIX }}"
+          PARAMS="autoconnect=1&reconnect=1&resize=remote&password=${{ env.VNC_PASSWORD }}"
 
-          # 探测常见 noVNC 页面路径
-          BASE1="https://$ROUTE/vnc.html"
-          BASE2="https://$ROUTE/novnc/vnc.html"
+          # 依次探测常见路径
+          CANDIDATES=(
+            "https://$ROUTE/vnc.html"
+            "https://$ROUTE/vnc_auto.html"
+            "https://$ROUTE/novnc/vnc.html"
+            "https://$ROUTE/novnc/vnc_auto.html"
+          )
 
-          # 如 curl 不可用，可直接输出 BASE1
-          if command -v curl >/dev/null 2>&1; then
-            CODE1=$(curl -sI "$BASE1" | awk 'NR==1{print $2}')
-            if [ "$CODE1" = "200" ]; then
-              FINAL_URL="$BASE1?$PARAMS"
-            else
-              CODE2=$(curl -sI "$BASE2" | awk 'NR==1{print $2}')
-              if [ "$CODE2" = "200" ]; then
-                FINAL_URL="$BASE2?$PARAMS"
-              else
-                FINAL_URL="$BASE1?$PARAMS"
-              fi
+          FINAL_URL=""
+          for BASE in "${CANDIDATES[@]}"; do
+            CODE=$(curl -sI "$BASE" | awk 'NR==1{print $2}')
+            if [ "$CODE" = "200" ]; then
+              FINAL_URL="$BASE?$PARAMS"
+              break
             fi
-          else
-            FINAL_URL="$BASE1?$PARAMS"
+          done
+
+          # 如果都没探测到 200，就默认用 /vnc.html
+          if [ -z "$FINAL_URL" ]; then
+            FINAL_URL="https://$ROUTE/vnc.html?$PARAMS"
           fi
 
-          echo "Firefox — 直达URL（打开即进桌面，无需点Connect/无需手输密码）:"
+          echo "Firefox — 直达URL（点击即进桌面，无需点Connect/无需手输密码）:"
           echo "$FINAL_URL"
+
+          # 备用（有些构建用 #hash 参数解析）
+          echo "备用直达URL（hash 方式）："
+          echo "${FINAL_URL%\?*}#${PARAMS}"
         else
           echo "⚠️ 未找到应用路由，请检查部署状态。"
         fi

@@ -20,7 +20,8 @@ on:
         options:
           #  免费区域
           - SG(free)  # azure新加披
-          - US(free)  # aws美国    
+          - US(free)  # aws美国
+          - US West   # ✅ 新增：US West（us02）
           # AWS 区域
           - AWS-AU(Sydney)
           - AWS-BR(São Paulo)
@@ -91,6 +92,11 @@ jobs:
           "US(free)")
             echo "CF_API=https://api.cf.us10-001.hana.ondemand.com" >> $GITHUB_ENV
             echo "APP_NAME=free-us$RANDOM_STR" >> $GITHUB_ENV
+            ;;
+          # ✅ 新增：US West
+          "US West")
+            echo "CF_API=https://api.cf.us02.hana.ondemand.com" >> $GITHUB_ENV
+            echo "APP_NAME=usw$RANDOM_STR" >> $GITHUB_ENV
             ;;
           # AWS 区域
           "AWS-AU(Sydney)")
@@ -300,7 +306,7 @@ jobs:
             echo "⚠️ 未找到应用路由，无法设置 DOMAIN,请手动将节点里的address、host和sni改为应用域名"
           fi
         fi
-        
+         
     - name: Restage application
       run: |
         cf restage ${{ env.APP_NAME }}

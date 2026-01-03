@@ -23,6 +23,7 @@ on:
           - US(free)  # aws美国
           - US West   # ✅ 新增：US West（us02）
           - SAP Syd   # ✅ 新增：SAP Syd（ap01）
+          - SAP Dubai # ✅ 新增：SAP Dubai（ae01）
           # AWS 区域
           - AWS-AU(Sydney)
           - AWS-BR(São Paulo)
@@ -103,6 +104,11 @@ jobs:
           "SAP Syd")
             echo "CF_API=https://api.cf.ap01.hana.ondemand.com" >> $GITHUB_ENV
             echo "APP_NAME=syd$RANDOM_STR" >> $GITHUB_ENV
+            ;;
+          # ✅ 新增：SAP Dubai
+          "SAP Dubai")
+            echo "CF_API=https://api.cf.ae01.hana.ondemand.com" >> $GITHUB_ENV
+            echo "APP_NAME=dxb$RANDOM_STR" >> $GITHUB_ENV
             ;;
           # AWS 区域
           "AWS-AU(Sydney)")

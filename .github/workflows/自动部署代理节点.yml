@@ -54,6 +54,7 @@ on:
           - Azure-US(VA)
           - Azure-US(WA)
           - Azure-EU(Netherlands)
+          - Azure-Germany(Frankfurt)
           - Azure-JP(Tokyo)
           - Azure-SG(Singapore)
           # SAP Neo 区域
@@ -219,6 +220,10 @@ jobs:
           "Azure-EU(Netherlands)")
             echo "CF_API=https://api.cf.eu20-001.hana.ondemand.com" >> $GITHUB_ENV
             echo "APP_NAME=az-eu$RANDOM_STR" >> $GITHUB_ENV
+            ;;
+          "Azure-Germany(Frankfurt)")
+            echo "CF_API=https://api.cf.eu22.hana.ondemand.com" >> $GITHUB_ENV
+            echo "APP_NAME=az-de$RANDOM_STR" >> $GITHUB_ENV
             ;;
           "Azure-JP(Tokyo)")
             echo "CF_API=https://api.cf.jp20.hana.ondemand.com" >> $GITHUB_ENV

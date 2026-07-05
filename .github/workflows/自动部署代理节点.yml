@@ -218,7 +218,7 @@ jobs:
             echo "APP_NAME=az-wa$RANDOM_STR" >> $GITHUB_ENV
             ;;
           "Azure-EU(Netherlands)")
-            echo "CF_API=https://api.cf.eu20-001.hana.ondemand.com" >> $GITHUB_ENV
+            echo "CF_API=https://api.cf.eu20-002.hana.ondemand.com" >> $GITHUB_ENV
             echo "APP_NAME=az-eu$RANDOM_STR" >> $GITHUB_ENV
             ;;
           "Azure-Germany(Frankfurt)")

@@ -138,7 +138,7 @@ jobs:
             echo "APP_NAME=aws-ca$RANDOM_STR" >> $GITHUB_ENV
             ;;
           "AWS-US(VA)")
-            echo "CF_API=https://api.cf.us10-001.hana.ondemand.com" >> $GITHUB_ENV
+            echo "CF_API=https://api.cf.us10-003.hana.ondemand.com" >> $GITHUB_ENV
             echo "APP_NAME=aws-usva$RANDOM_STR" >> $GITHUB_ENV
             ;;
           "AWS-US(OR)")

@@ -273,31 +273,47 @@ jobs:
         echo "部署类型: ${{ env.DOCKER_IMAGE }}"
 
     - name: Login to Cloud Foundry
+      env:
+        CF_API_TARGET: ${{ env.CF_API }}
+        CF_ORG_TARGET: ${{ secrets.CF_ORG }}
+        CF_SPACE_TARGET: ${{ secrets.CF_SPACE }}
+        CF_USERNAME: ${{ secrets.EMAIL }}
+        CF_PASSWORD: ${{ secrets.PASSWORD }}
       run: |
-        cf login -a ${{ env.CF_API }} -u "${{ secrets.EMAIL }}" -p "${{ secrets.PASSWORD }}"
+        set -euo pipefail
 
-        # 获取组织列表
-        ORG=$(cf orgs | sed -n '4p')
-        echo "Selected org: $ORG"
-        echo "ORG=$ORG" >> $GITHUB_ENV
-
-        # 获取空间列表
-        SPACE=$(cf spaces | sed -n '4p')
-        echo "Selected space: $SPACE"
-        echo "SPACE=$SPACE" >> $GITHUB_ENV
-
-        # 使用获取的组织和空间重新登录
-        cf login -a ${{ env.CF_API }} -u "${{ secrets.EMAIL }}" -p "${{ secrets.PASSWORD }}" -o "$ORG" -s "$SPACE"
-
-    - name: Deploy application
-      run: |
-        if cf push ${{ env.APP_NAME }} --docker-image ${{ env.DOCKER_IMAGE }} -m ${{ env.MEMORY }} -k ${{ env.DISK }} --health-check-type port; then
-          echo "Deployment successful"
-        else
-          cf delete ${{ env.APP_NAME }} -r -f
-          echo "伙计,没资源了,部署失败,请明天早上8:20至9:00再尝试部署,已清理失败部署残留"
+        if [ -z "${CF_API_TARGET:-}" ]; then
+          echo "::error::CF_API is empty"
           exit 1
         fi
+
+        if [ -z "${CF_ORG_TARGET:-}" ]; then
+          echo "::error::CF_ORG secret is empty"
+          exit 1
+        fi
+
+        if [ -z "${CF_SPACE_TARGET:-}" ]; then
+          echo "::error::CF_SPACE secret is empty"
+          exit 1
+        fi
+
+        echo "Logging in to Cloud Foundry..."
+        echo "API endpoint: $CF_API_TARGET"
+        echo "Target organization: $CF_ORG_TARGET"
+        echo "Target space: $CF_SPACE_TARGET"
+
+        cf login \
+          -a "$CF_API_TARGET" \
+          -u "$CF_USERNAME" \
+          -p "$CF_PASSWORD" \
+          -o "$CF_ORG_TARGET" \
+          -s "$CF_SPACE_TARGET"
+
+        echo "ORG=$CF_ORG_TARGET" >> "$GITHUB_ENV"
+        echo "SPACE=$CF_SPACE_TARGET" >> "$GITHUB_ENV"
+
+        echo "Current Cloud Foundry target:"
+        cf target
         
     - name: Set environment variables
       run: |
